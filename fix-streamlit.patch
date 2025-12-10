@@ -1,0 +1,202 @@
+diff --git a/.streamlit/config.toml b/.streamlit/config.toml
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/.streamlit/config.toml
+@@ -0,0 +1,4 @@
++[server]
++headless = true
++port = 8050
++enableCORS = false
+diff --git a/run_local.sh b/run_local.sh
+new file mode 100644
+index 0000000..abcdefg
+--- /dev/null
++++ b/run_local.sh
+@@ -0,0 +1,8 @@
++#!/usr/bin/env bash
++# Run the Streamlit app locally on port 8050
++set -euo pipefail
++
++PORT=${1:-8050}
++
++echo "Starting Streamlit app on port $PORT..."
++streamlit run main.py --server.port "$PORT" --server.headless true
+diff --git a/run_headless_test.py b/run_headless_test.py
+new file mode 100644
+index 0000000..bcdefgh
+--- /dev/null
++++ b/run_headless_test.py
+@@ -0,0 +1,48 @@
++import numpy as np
++from trading_logic import TradingStrategy
++from kraken_api import KrakenAPI
++
++def generate_price_series(base=50000, n=500, volatility=0.002):
++    prices = [base]
++    for _ in range(n-1):
++        change = prices[-1] * volatility * (np.random.random() - 0.5)
++        prices.append(prices[-1] + change)
++    return prices
++
++def main():
++    print("Starting headless test...")
++
++    # Verify KrakenAPI import/instantiation
++    try:
++        api = KrakenAPI()
++        print("KrakenAPI instantiated.")
++    except Exception as e:
++        print(f"KrakenAPI import/instantiation failed: {e}")
++
++    # Run strategy simulation
++    strategy = TradingStrategy()
++    prices = generate_price_series()
++    result = strategy.simulate_strategy(
++        historical_prices=prices,
++        initial_balance=10000,
++        rsi_period=14,
++        oversold=30,
++        overbought=70,
++        stop_loss=2.0,
++        take_profit=4.0,
++        position_size_pct=10
++    )
++
++    print("Simulation results:")
++    print(f" Final balance: ${result['final_balance']:,.2f}")
++    print(f" Total trades: {result['total_trades']}")
++    print(f" Winning trades: {result['winning_trades']}")
++    print(f" Win rate: {result['win_rate']:.2f}%")
++    print(f" Total profit: ${result['total_profit']:,.2f}")
++
++    if result['trades']:
++        print(" First 5 trades:")
++        for t in result['trades'][:5]:
++            print(t)
++
++if __name__ == '__main__':
++    main()
+diff --git a/main.py b/main.py
+index 1111111..2222222 100644
+--- a/main.py
++++ b/main.py
+@@ -540,7 +540,7 @@ class TradingBot:
+                 help="Your Kraken API Secret"
+                              )
+                                           
+                                           -            sandbox_mode = st.toggle(
+                                           +            sandbox_mode = st.checkbox(
+                                                            "Use Sandbox/Testnet",
+                                                                             value=st.session_state.get('sandbox_mode', True),
+                                                                                              help="Use Kraken's test environment (recommended for testing)"
+                                                                                              diff --git a/requirements.txt b/requirements.txt
+                                                                                              index 3333333..4444444 100644
+                                                                                              --- a/requirements.txt
+                                                                                              +++ b/requirements.txt
+                                                                                              @@ -1,20 +1,10 @@
+                                                                                               streamlit>=1.28.0
+                                                                                                plotly>=5.17.0
+                                                                                                 pandas>=2.0.0
+                                                                                                  numpy>=1.24.0
+                                                                                                   python-dotenv>=1.0.0
+                                                                                                    krakenex>=2.1.0
+                                                                                                     websocket-client>=1.6.0
+                                                                                                      pyyaml>=6.0
+                                                                                                       ta>=0.10.0
+                                                                                                        ccxt>=4.0.0
+                                                                                                        -ccxt
+                                                                                                        -krakenex
+                                                                                                        -numpy
+                                                                                                        -pandas
+                                                                                                        -plotly
+                                                                                                        -python-dotenv
+                                                                                                        -pyyaml
+                                                                                                        -streamlit
+                                                                                                        -ta
+                                                                                                        -websocket-client
+                                                                                                        diff --git a/README.md b/README.md
+                                                                                                        index 5555555..6666666 100644
+                                                                                                        --- a/README.md
+                                                                                                        +++ b/README.md
+                                                                                                        @@ -1,20 +1,72 @@
+                                                                                                        -````markdown
+                                                                                                         # Kraken RSI Trading Bot
+                                                                                                          
+                                                                                                          -A professional trading bot built with Streamlit that connects to Kraken exchange for real-time trading.
+                                                                                                          +A professional trading bot built with Streamlit that can connect to Kraken for live trading or run in a local simulation mode.
+                                                                                                           
+                                                                                                            ## Features
+                                                                                                             
+                                                                                                             -- **Real Kraken API Integration**: Connect to Kraken for live trading
+                                                                                                             -- **Dual Mode**: Simulation mode for testing, Live mode for real trading
+                                                                                                             -- **RSI Strategy**: Configurable RSI-based trading strategy
+                                                                                                             -- **Risk Management**: Stop loss, take profit, position sizing
+                                                                                                             -- **Real-time Dashboard**: Live charts and metrics
+                                                                                                             -- **Trade History**: Track and export all trades
+                                                                                                             +- Real Kraken API integration (via `krakenex`)
+                                                                                                             +- Simulation and Live modes
+                                                                                                             +- RSI-based trading strategy with stop-loss/take-profit
+                                                                                                             +- Simple Streamlit dashboard showing price, RSI, trade history and metrics
+                                                                                                              
+                                                                                                              -## Setup Instructions
+                                                                                                              +## Setup
+                                                                                                               
+                                                                                                                ### 1. Clone the Repository
+                                                                                                                 ```bash
+                                                                                                                  git clone https://github.com/yourusername/kraken-trading-bot.git
+                                                                                                                   cd kraken-trading-bot
+                                                                                                                    ```
+                                                                                                                    +
+                                                                                                                    +2. (Optional) Create and activate a virtual environment
+                                                                                                                    +
+                                                                                                                    +```bash
+                                                                                                                    +python -m venv .venv
+                                                                                                                    +source .venv/bin/activate
+                                                                                                                    +```
+                                                                                                                    +
+                                                                                                                    +3. Install dependencies
+                                                                                                                    +
+                                                                                                                    +```bash
+                                                                                                                    +pip install -r requirements.txt
+                                                                                                                    +```
+                                                                                                                    +
+                                                                                                                    +## Running the Full Web UI Locally
+                                                                                                                    +
+                                                                                                                    +This project uses Streamlit for the UI. Running locally does not require Streamlit Cloud credits.
+                                                                                                                    +
+                                                                                                                    +Start the app on port 8050 (default in the included Streamlit config):
+                                                                                                                    +
+                                                                                                                    +```bash
+                                                                                                                    +# make the helper script executable (first time only)
+                                                                                                                    +chmod +x run_local.sh
+                                                                                                                    +
+                                                                                                                    +# run the app (uses port 8050 by default)
+                                                                                                                    +./run_local.sh 8050
+                                                                                                                    +
+                                                                                                                    +# OR run directly
+                                                                                                                    +streamlit run main.py --server.port 8050 --server.headless true
+                                                                                                                    +```
+                                                                                                                    +
+                                                                                                                    +Open your browser to http://localhost:8050 to view the full dashboard.
+                                                                                                                    +
+                                                                                                                    +## Headless Test
+                                                                                                                    +
+                                                                                                                    +If you only want to run a quick simulation (no UI), use the included headless test:
+                                                                                                                    +
+                                                                                                                    +```bash
+                                                                                                                    +python run_headless_test.py
+                                                                                                                    +```
+                                                                                                                    +
+                                                                                                                    +## Configuration
+                                                                                                                    +
+                                                                                                                    +- API keys are read/written from `config.yaml` if present; do not commit that file containing secrets.
+                                                                                                                    +- Streamlit server defaults are in `.streamlit/config.toml` (port 8050, headless true).
+                                                                                                                    +
+                                                                                                                    +## Next Steps / Troubleshooting
+                                                                                                                    +
+                                                                                                                    +- If you see Streamlit UI issues, ensure your environment has the correct `requirements.txt` packages installed.
+                                                                                                                    +- If you want to host the UI remotely without Streamlit Cloud, you can deploy to a VM, Docker container, or another hosting provider and run the same `streamlit run` command.
+                                                                                                                    +
+                                                                                                                    +If you want, I can try to start the server here and verify it — or guide you step-by-step while you run the `./run_local.sh` command and paste any output errors.
+                                                                                                                    

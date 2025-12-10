@@ -122,11 +122,22 @@ class TradingBot:
             },
             'config': {
                 'rsi_length': 14,
-                'overbought': 70,
-                'oversold': 30,
-                'stop_loss': 2.0,
-                'take_profit': 4.0,
-                'position_size_pct': 10,
+                # Long-specific params
+                'long_oversold': 30,
+                'long_stop_loss': 2.0,
+                'long_take_profit': 4.0,
+                'long_min_take_profit_enabled': False,
+                'long_min_take_profit': 1.0,
+                'long_rsi_length': 14,
+                'long_position_size_pct': 10,
+                # Short-specific params
+                'short_overbought': 70,
+                'short_stop_loss': 2.0,
+                'short_take_profit': 4.0,
+                'short_min_take_profit_enabled': False,
+                'short_min_take_profit': 1.0,
+                'short_rsi_length': 14,
+                'short_position_size_pct': 10,
                 'trading_pair': 'BTC/USD',
                 'timeframe': '1m'
             },
@@ -334,20 +345,25 @@ class TradingBot:
             ))
         
         # Overbought/oversold lines
+        # Show short overbought and long oversold lines
         fig.add_hline(
-            y=st.session_state.config['overbought'],
+            y=st.session_state.config.get('short_overbought', 70),
             line_dash="dash",
             line_color="#EF4444",
             yref="y2",
-            opacity=0.5
+            opacity=0.5,
+            annotation_text="Short OB",
+            annotation_position="top right"
         )
-        
+
         fig.add_hline(
-            y=st.session_state.config['oversold'],
+            y=st.session_state.config.get('long_oversold', 30),
             line_dash="dash",
             line_color="#10B981",
             yref="y2",
-            opacity=0.5
+            opacity=0.5,
+            annotation_text="Long OS",
+            annotation_position="bottom right"
         )
         
         fig.update_layout(
@@ -445,69 +461,132 @@ class TradingBot:
         st.markdown("### Trading Configuration")
         
         with st.form("config_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.session_state.config['rsi_length'] = st.slider(
-                    "RSI Length",
-                    min_value=5,
-                    max_value=30,
-                    value=st.session_state.config['rsi_length'],
-                    help="Period for RSI calculation"
+            # RSI settings
+            st.session_state.config['long_rsi_length'] = st.slider(
+                "Long - RSI Length",
+                min_value=5,
+                max_value=30,
+                value=st.session_state.config['long_rsi_length'],
+                help="Period for RSI calculation for long entries/exits"
+            )
+            st.session_state.config['short_rsi_length'] = st.slider(
+                "Short - RSI Length",
+                min_value=5,
+                max_value=30,
+                value=st.session_state.config['short_rsi_length'],
+                help="Period for RSI calculation for short entries/exits"
+            )
+                st.session_state.config['long_min_take_profit_enabled'] = st.checkbox(
+                    "Long - Use Minimum Take Profit",
+                    value=st.session_state.config['long_min_take_profit_enabled'],
+                    help="If enabled, long deals only close on indicator if min profit is also met."
                 )
-                
-                st.session_state.config['overbought'] = st.slider(
-                    "Overbought Level",
-                    min_value=60,
-                    max_value=90,
-                    value=st.session_state.config['overbought'],
-                    help="RSI level to trigger sell/short signals"
-                )
-                
-                st.session_state.config['stop_loss'] = st.slider(
-                    "Stop Loss %",
-                    min_value=0.5,
+                st.session_state.config['long_min_take_profit'] = st.slider(
+                    "Long - Minimum Take Profit %",
+                    min_value=0.1,
                     max_value=10.0,
-                    value=st.session_state.config['stop_loss'],
+                    value=st.session_state.config['long_min_take_profit'],
                     step=0.1,
-                    help="Maximum loss percentage before closing position"
+                    help="Minimum profit required to close long position on indicator."
                 )
-            
-            with col2:
-                st.session_state.config['oversold'] = st.slider(
-                    "Oversold Level",
-                    min_value=10,
-                    max_value=40,
-                    value=st.session_state.config['oversold'],
+                st.session_state.config['short_min_take_profit_enabled'] = st.checkbox(
+                    "Short - Use Minimum Take Profit",
+                    value=st.session_state.config['short_min_take_profit_enabled'],
+                    help="If enabled, short deals only close on indicator if min profit is also met."
+                )
+                st.session_state.config['short_min_take_profit'] = st.slider(
+                    "Short - Minimum Take Profit %",
+                    min_value=0.1,
+                    max_value=10.0,
+                    value=st.session_state.config['short_min_take_profit'],
+                    step=0.1,
+                    help="Minimum profit required to close short position on indicator."
+                )
+
+            # Two-column layout for long and short parameters
+            col_long, col_short = st.columns(2)
+
+            with col_long:
+                st.markdown("#### Long (Buy) Parameters")
+                st.session_state.config['long_oversold'] = st.slider(
+                    "Long - Oversold Level",
+                    min_value=5,
+                    max_value=50,
+                    value=st.session_state.config['long_oversold'],
                     help="RSI level to trigger buy/long signals"
                 )
-                
-                st.session_state.config['take_profit'] = st.slider(
-                    "Take Profit %",
+
+                st.session_state.config['long_stop_loss'] = st.slider(
+                    "Long - Stop Loss %",
+                    min_value=0.5,
+                    max_value=10.0,
+                    value=st.session_state.config['long_stop_loss'],
+                    step=0.1,
+                    help="Maximum loss percentage before closing long positions"
+                )
+
+                st.session_state.config['long_take_profit'] = st.slider(
+                    "Long - Take Profit %",
                     min_value=1.0,
                     max_value=20.0,
-                    value=st.session_state.config['take_profit'],
+                    value=st.session_state.config['long_take_profit'],
                     step=0.1,
-                    help="Target profit percentage before closing position"
+                    help="Target profit percentage before closing long positions"
                 )
-                
-                st.session_state.config['position_size_pct'] = st.slider(
-                    "Position Size %",
+
+                st.session_state.config['long_position_size_pct'] = st.slider(
+                    "Long - Position Size %",
                     min_value=1,
                     max_value=100,
-                    value=st.session_state.config['position_size_pct'],
-                    help="Percentage of account to use per trade"
+                    value=st.session_state.config['long_position_size_pct'],
+                    help="Percentage of account to use per long trade"
                 )
-            
+
+            with col_short:
+                st.markdown("#### Short (Sell) Parameters")
+                st.session_state.config['short_overbought'] = st.slider(
+                    "Short - Overbought Level",
+                    min_value=50,
+                    max_value=95,
+                    value=st.session_state.config['short_overbought'],
+                    help="RSI level to trigger sell/short signals"
+                )
+
+                st.session_state.config['short_stop_loss'] = st.slider(
+                    "Short - Stop Loss %",
+                    min_value=0.5,
+                    max_value=10.0,
+                    value=st.session_state.config['short_stop_loss'],
+                    step=0.1,
+                    help="Maximum loss percentage before closing short positions"
+                )
+
+                st.session_state.config['short_take_profit'] = st.slider(
+                    "Short - Take Profit %",
+                    min_value=1.0,
+                    max_value=20.0,
+                    value=st.session_state.config['short_take_profit'],
+                    step=0.1,
+                    help="Target profit percentage before closing short positions"
+                )
+
+                st.session_state.config['short_position_size_pct'] = st.slider(
+                    "Short - Position Size %",
+                    min_value=1,
+                    max_value=100,
+                    value=st.session_state.config['short_position_size_pct'],
+                    help="Percentage of account to use per short trade"
+                )
+
             col3, col4 = st.columns(2)
-            
+
             with col3:
                 st.session_state.config['trading_pair'] = st.selectbox(
                     "Trading Pair",
                     ["BTC/USD", "ETH/USD", "SOL/USD", "ADA/USD", "DOT/USD", "XRP/USD"],
                     index=["BTC/USD", "ETH/USD", "SOL/USD", "ADA/USD", "DOT/USD", "XRP/USD"].index(st.session_state.config['trading_pair'])
                 )
-            
+
             with col4:
                 st.session_state.config['timeframe'] = st.selectbox(
                     "Timeframe",
@@ -515,7 +594,7 @@ class TradingBot:
                     index=["1m", "5m", "15m", "30m", "1h", "4h", "1d"].index(st.session_state.config.get('timeframe', '1m')),
                     help="Chart timeframe for analysis"
                 )
-            
+
             if st.form_submit_button("💾 Save Configuration"):
                 st.success("Configuration saved!")
                 st.rerun()
@@ -539,7 +618,7 @@ class TradingBot:
                 help="Your Kraken API Secret"
             )
             
-            sandbox_mode = st.toggle(
+            sandbox_mode = st.checkbox(
                 "Use Sandbox/Testnet",
                 value=st.session_state.get('sandbox_mode', True),
                 help="Use Kraken's test environment (recommended for testing)"
@@ -644,9 +723,10 @@ class TradingBot:
         # Get current price (simulated or real)
         current_price = self.get_current_price()
         
-        # Calculate position size
+        # Calculate position size (use side-specific setting)
         account_balance = st.session_state.real_balance if st.session_state.trading_mode == 'live' else st.session_state.balance
-        position_value = account_balance * (st.session_state.config['position_size_pct'] / 100)
+        pct_key = 'long_position_size_pct' if trade_type == 'long' else 'short_position_size_pct'
+        position_value = account_balance * (st.session_state.config.get(pct_key, 10) / 100)
         position_size = position_value / current_price
         
         # Record trade
@@ -665,8 +745,13 @@ class TradingBot:
         st.session_state.position_size = position_size
         
         # Update balance for simulation mode
-        if st.session_state.trading_mode == 'simulation' and trade_type == 'long':
-            st.session_state.balance -= position_value
+        if st.session_state.trading_mode == 'simulation':
+            # For long reduce balance by position value, for short we keep cash but track position notional
+            if trade_type == 'long':
+                st.session_state.balance -= position_value
+            else:
+                # For short, reserve margin (approx): deduct a small margin equal to position value * 0.01 to simulate margin impact
+                st.session_state.balance -= position_value * 0.01
         
         st.success(f"{trade_type.upper()} position opened at ${current_price:,.2f}")
         
@@ -752,26 +837,27 @@ class TradingBot:
     
     def update_rsi(self):
         """Update RSI values"""
-        if len(st.session_state.prices) < st.session_state.config['rsi_length'] + 1:
-            st.session_state.rsi_values.append(50)
-            return
-        
-        prices = st.session_state.prices[-st.session_state.config['rsi_length']-1:]
-        deltas = np.diff(prices)
-        
-        gains = np.where(deltas > 0, deltas, 0)
-        losses = np.where(deltas < 0, -deltas, 0)
-        
-        avg_gain = np.mean(gains)
-        avg_loss = np.mean(losses)
-        
-        if avg_loss == 0:
-            rsi = 100
-        else:
+        # Compute both long and short RSI values
+        long_len = st.session_state.config.get('long_rsi_length', 14)
+        short_len = st.session_state.config.get('short_rsi_length', 14)
+        prices = st.session_state.prices
+        def calc_rsi(prices, period):
+            if len(prices) < period + 1:
+                return 50.0
+            deltas = np.diff(prices[-period-1:])
+            gains = np.where(deltas > 0, deltas, 0)
+            losses = np.where(deltas < 0, -deltas, 0)
+            avg_gain = np.mean(gains)
+            avg_loss = np.mean(losses)
+            if avg_loss == 0:
+                return 100.0
             rs = avg_gain / avg_loss
-            rsi = 100 - (100 / (1 + rs))
-        
-        st.session_state.rsi_values.append(rsi)
+            return 100 - (100 / (1 + rs))
+
+        # Store as tuple: (long_rsi, short_rsi)
+        long_rsi = calc_rsi(prices, long_len)
+        short_rsi = calc_rsi(prices, short_len)
+        st.session_state.rsi_values.append((long_rsi, short_rsi))
         if len(st.session_state.rsi_values) > 200:
             st.session_state.rsi_values.pop(0)
     
@@ -783,14 +869,14 @@ class TradingBot:
             
             # Check for trading signals
             if len(st.session_state.rsi_values) > 0:
-                current_rsi = st.session_state.rsi_values[-1]
-                
-                # Buy signal (oversold)
-                if current_rsi < st.session_state.config['oversold'] and not st.session_state.current_position:
+                long_rsi, short_rsi = st.session_state.rsi_values[-1] if isinstance(st.session_state.rsi_values[-1], tuple) else (st.session_state.rsi_values[-1], st.session_state.rsi_values[-1])
+
+                # Buy signal (long) - use long_oversold and long_rsi
+                if long_rsi < st.session_state.config.get('long_oversold', 30) and not st.session_state.current_position:
                     self.place_manual_trade('long')
-                
-                # Sell signal (overbought)
-                elif current_rsi > st.session_state.config['overbought'] and not st.session_state.current_position:
+
+                # Sell signal (short) - use short_overbought and short_rsi
+                elif short_rsi > st.session_state.config.get('short_overbought', 70) and not st.session_state.current_position:
                     self.place_manual_trade('short')
                 
                 # Check stop loss/take profit
@@ -813,15 +899,46 @@ class TradingBot:
         else:  # short
             profit_pct = ((entry_price - current_price) / entry_price) * 100
         
+        # Choose side-specific stop loss / take profit / min take profit
+        if st.session_state.current_position == 'long':
+            stop_loss = st.session_state.config.get('long_stop_loss', 2.0)
+            take_profit = st.session_state.config.get('long_take_profit', 4.0)
+            min_tp_enabled = st.session_state.config.get('long_min_take_profit_enabled', False)
+            min_tp = st.session_state.config.get('long_min_take_profit', 1.0)
+        else:
+            stop_loss = st.session_state.config.get('short_stop_loss', 2.0)
+            take_profit = st.session_state.config.get('short_take_profit', 4.0)
+            min_tp_enabled = st.session_state.config.get('short_min_take_profit_enabled', False)
+            min_tp = st.session_state.config.get('short_min_take_profit', 1.0)
+
         # Check stop loss
-        if profit_pct <= -st.session_state.config['stop_loss']:
+        if profit_pct <= -stop_loss:
             st.warning(f"Stop loss triggered: {profit_pct:.2f}%")
             self.close_position()
-        
-        # Check take profit
-        elif profit_pct >= st.session_state.config['take_profit']:
+            return
+
+        # Check take profit (with min take profit logic)
+        if profit_pct >= take_profit:
             st.success(f"Take profit triggered: {profit_pct:.2f}%")
             self.close_position()
+            return
+
+        # Check indicator-based close (RSI cross) with min take profit logic
+        # Only close if both indicator and min take profit are met, if enabled
+        # (This logic is for auto-trading; manual close is always allowed)
+        long_rsi, short_rsi = st.session_state.rsi_values[-1] if isinstance(st.session_state.rsi_values[-1], tuple) else (st.session_state.rsi_values[-1], st.session_state.rsi_values[-1])
+        if st.session_state.current_position == 'long':
+            # Close if long_rsi > short_overbought (indicator), and min_tp if enabled
+            if long_rsi > st.session_state.config.get('short_overbought', 70):
+                if not min_tp_enabled or profit_pct >= min_tp:
+                    st.info(f"Long close: RSI cross + min TP ({profit_pct:.2f}%)")
+                    self.close_position()
+        else:
+            # Close if short_rsi < long_oversold (indicator), and min_tp if enabled
+            if short_rsi < st.session_state.config.get('long_oversold', 30):
+                if not min_tp_enabled or profit_pct >= min_tp:
+                    st.info(f"Short close: RSI cross + min TP ({profit_pct:.2f}%)")
+                    self.close_position()
     
     def execute_real_trade(self, trade_type, price, size):
         """Execute a real trade on Kraken"""

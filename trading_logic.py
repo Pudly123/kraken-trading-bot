@@ -78,9 +78,13 @@ class TradingStrategy:
         return False
     
     def simulate_strategy(self, historical_prices: List[float], initial_balance: float = 10000,
-                         rsi_period: int = 14, oversold: int = 30, overbought: int = 70,
-                         stop_loss: float = 2.0, take_profit: float = 4.0,
-                         position_size_pct: float = 10) -> dict:
+                         long_rsi_length: int = 14, short_rsi_length: int = 14,
+                         long_oversold: int = 30, short_overbought: int = 70,
+                         long_stop_loss: float = 2.0, short_stop_loss: float = 2.0,
+                         long_take_profit: float = 4.0, short_take_profit: float = 4.0,
+                         long_min_take_profit_enabled: bool = False, short_min_take_profit_enabled: bool = False,
+                         long_min_take_profit: float = 1.0, short_min_take_profit: float = 1.0,
+                         long_position_size_pct: float = 10, short_position_size_pct: float = 10) -> dict:
         """Simulate trading strategy on historical data"""
         balance = initial_balance
         position = None
@@ -88,37 +92,32 @@ class TradingStrategy:
         position_size = 0
         trades = []
         
-        for i in range(rsi_period + 1, len(historical_prices)):
+        for i in range(max(long_rsi_length, short_rsi_length) + 1, len(historical_prices)):
             current_price = historical_prices[i]
             price_window = historical_prices[:i+1]
-            
-            # Get RSI signal
-            rsi = self.calculate_rsi(price_window, rsi_period)
+            # Compute both RSIs
+            long_rsi = self.calculate_rsi(price_window, long_rsi_length)
+            short_rsi = self.calculate_rsi(price_window, short_rsi_length)
             
             if position is None:
-                # Check for entry signal
-                if rsi < oversold:
-                    # Buy signal
+                # Entry signals
+                if long_rsi < long_oversold:
                     position = 'long'
                     entry_price = current_price
-                    position_value = balance * (position_size_pct / 100)
+                    position_value = balance * (long_position_size_pct / 100)
                     position_size = position_value / entry_price
                     balance -= position_value
-                    
                     trades.append({
                         'type': 'long',
                         'entry_price': entry_price,
                         'entry_time': i,
                         'size': position_size
                     })
-                    
-                elif rsi > overbought:
-                    # Sell signal (short)
+                elif short_rsi > short_overbought:
                     position = 'short'
                     entry_price = current_price
-                    position_value = balance * (position_size_pct / 100)
+                    position_value = balance * (short_position_size_pct / 100)
                     position_size = position_value / entry_price
-                    
                     trades.append({
                         'type': 'short',
                         'entry_price': entry_price,
@@ -130,33 +129,73 @@ class TradingStrategy:
                 # Check for exit signals
                 if position == 'long':
                     profit_pct = ((current_price - entry_price) / entry_price) * 100
-                    
-                    if profit_pct <= -stop_loss or profit_pct >= take_profit or rsi > overbought:
-                        # Exit long position
+                    # Stop loss
+                    if profit_pct <= -long_stop_loss:
                         balance += position_size * current_price
-                        
                         trades[-1]['exit_price'] = current_price
                         trades[-1]['exit_time'] = i
                         trades[-1]['profit'] = (current_price - entry_price) * position_size
                         trades[-1]['profit_pct'] = profit_pct
-                        
                         position = None
                         entry_price = 0
                         position_size = 0
-                
+                        continue
+                    # Take profit
+                    if profit_pct >= long_take_profit:
+                        balance += position_size * current_price
+                        trades[-1]['exit_price'] = current_price
+                        trades[-1]['exit_time'] = i
+                        trades[-1]['profit'] = (current_price - entry_price) * position_size
+                        trades[-1]['profit_pct'] = profit_pct
+                        position = None
+                        entry_price = 0
+                        position_size = 0
+                        continue
+                    # Indicator close (RSI cross)
+                    if long_rsi > short_overbought:
+                        if (not long_min_take_profit_enabled) or (profit_pct >= long_min_take_profit):
+                            balance += position_size * current_price
+                            trades[-1]['exit_price'] = current_price
+                            trades[-1]['exit_time'] = i
+                            trades[-1]['profit'] = (current_price - entry_price) * position_size
+                            trades[-1]['profit_pct'] = profit_pct
+                            position = None
+                            entry_price = 0
+                            position_size = 0
+                            continue
                 elif position == 'short':
                     profit_pct = ((entry_price - current_price) / entry_price) * 100
-                    
-                    if profit_pct <= -stop_loss or profit_pct >= take_profit or rsi < oversold:
-                        # Exit short position
+                    # Stop loss
+                    if profit_pct <= -short_stop_loss:
                         trades[-1]['exit_price'] = current_price
                         trades[-1]['exit_time'] = i
                         trades[-1]['profit'] = (entry_price - current_price) * position_size
                         trades[-1]['profit_pct'] = profit_pct
-                        
                         position = None
                         entry_price = 0
                         position_size = 0
+                        continue
+                    # Take profit
+                    if profit_pct >= short_take_profit:
+                        trades[-1]['exit_price'] = current_price
+                        trades[-1]['exit_time'] = i
+                        trades[-1]['profit'] = (entry_price - current_price) * position_size
+                        trades[-1]['profit_pct'] = profit_pct
+                        position = None
+                        entry_price = 0
+                        position_size = 0
+                        continue
+                    # Indicator close (RSI cross)
+                    if short_rsi < long_oversold:
+                        if (not short_min_take_profit_enabled) or (profit_pct >= short_min_take_profit):
+                            trades[-1]['exit_price'] = current_price
+                            trades[-1]['exit_time'] = i
+                            trades[-1]['profit'] = (entry_price - current_price) * position_size
+                            trades[-1]['profit_pct'] = profit_pct
+                            position = None
+                            entry_price = 0
+                            position_size = 0
+                            continue
         
         # Close any open position at the end
         if position is not None:
@@ -166,6 +205,12 @@ class TradingStrategy:
                 trades[-1]['exit_time'] = len(historical_prices) - 1
                 trades[-1]['profit'] = (historical_prices[-1] - entry_price) * position_size
                 trades[-1]['profit_pct'] = ((historical_prices[-1] - entry_price) / entry_price) * 100
+            elif position == 'short':
+                # Close short at last price
+                trades[-1]['exit_price'] = historical_prices[-1]
+                trades[-1]['exit_time'] = len(historical_prices) - 1
+                trades[-1]['profit'] = (entry_price - historical_prices[-1]) * position_size
+                trades[-1]['profit_pct'] = ((entry_price - historical_prices[-1]) / entry_price) * 100
         
         # Calculate performance metrics
         total_trades = len([t for t in trades if 'profit' in t])

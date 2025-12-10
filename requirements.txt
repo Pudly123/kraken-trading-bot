@@ -8,13 +8,3 @@ websocket-client>=1.6.0
 pyyaml>=6.0
 ta>=0.10.0
 ccxt>=4.0.0
-ccxt
-krakenex
-numpy
-pandas
-plotly
-python-dotenv
-pyyaml
-streamlit
-ta
-websocket-client
